@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="248" viewBox="0 0 1000 248">
+<rect x="0" y="0" width="1000" height="248" fill="#ffffff" stroke="#e5e7eb" />
+<text x="20" y="36" font-family="monospace" font-size="16" font-weight="bold" fill="#111827">EOF Propagation</text>
+<text x="20" y="56" font-family="monospace" font-size="14">
+<tspan x="20" dy="0" fill="#92400e">EOF cascade (left → right):</tspan>
+</text>
+<text x="20" y="78" font-family="monospace" font-size="14">
+<tspan x="20" dy="0" fill="#b91c1c">  P0 closes IN.w  ─►  P1 sees EOF on L1.r</tspan>
+</text>
+<text x="20" y="100" font-family="monospace" font-size="14">
+<tspan x="20" dy="0" fill="#b91c1c">  P1 closes R1.w  ─►  P2 sees EOF on L2.r (= R1.r)</tspan>
+</text>
+<text x="20" y="122" font-family="monospace" font-size="14">
+<tspan x="20" dy="0" fill="#b91c1c">  P2 closes R2.w  ─►  P3 sees EOF on L3.r (= R2.r)</tspan>
+</text>
+<text x="20" y="144" font-family="monospace" font-size="14">
+<tspan x="20" dy="0" fill="#b91c1c">  …</tspan>
+</text>
+<text x="20" y="166" font-family="monospace" font-size="14">
+<tspan x="20" dy="0" fill="#111827"></tspan>
+</text>
+<text x="20" y="188" font-family="monospace" font-size="14">
+<tspan x="20" dy="0" fill="#111827">Each parent closes its right write-end; once all writers are closed,</tspan>
+</text>
+<text x="20" y="210" font-family="monospace" font-size="14">
+<tspan x="20" dy="0" fill="#111827">the next stage’s read() returns 0 (EOF) and teardown unwinds cleanly.</tspan>
+</text>
+</svg>
