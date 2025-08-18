@@ -30,4 +30,5 @@
 #define USERSTACK    1     // user stack pages
 #endif
 
+#define HZ 10  // clock freq: 10 ticks = 1 sec
 
