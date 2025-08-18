@@ -61,8 +61,8 @@ The command to run is everything that comes after `xargs` in argv.
 
 ## 3. Edge Cases to Consider
 - Too many arguments -> must not exceed `MAXARG`.
-- Long lines -> input buffer overflow.
-- Empty lines -> probably should skip.
+- Long lines $\rightarrow$ input buffer overflow.
+- Empty lines $\rightarrow$ probably should skip.
 - EOF without `\n` -> process last line anyway.
 
 ## 4. Connecting with the Pipe
@@ -81,6 +81,19 @@ Process fd table:
 dup(3) returned 4
 ```
 
+## 5. Putting It All Together
+Algorithm in words:
+1. Save the base command arguments from argv
+2. While there is input:
+    
+    * Read a line into buffer.
+    * Split line into words.
+    * Build `argv` = base args + line words.
+    * Fork $\rightarrow$ exec the command
+    * Parent waits.
+3. Done when no more input.
 
 
-
+## 6. Why this Design Works
+* Specs: One line $\rightarrow$ one exec
+* Satisfy xv6 limits $\rightarrow$ `MAXARG`, small buffers
