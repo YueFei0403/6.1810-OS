@@ -30,6 +30,7 @@ parse_args(char *line, char *args[], int start)
         }
         p++;
     }
+    // Ensure the argv are null terminated
     args[argc] = 0;
     return argc;
 }
@@ -61,7 +62,7 @@ main(int argc, char *argv[])
                 xargv[i] = argv[i+1];
 
             // Parse line into words appended after base args
-            int new_argc = parse_args(buf, xargv, base_argc);
+            parse_args(buf, xargv, base_argc);
 
             // Run the cmd: one line -> one exec
             if (fork() == 0) {
