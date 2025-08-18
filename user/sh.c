@@ -3,6 +3,7 @@
 #include "kernel/types.h"
 #include "user/user.h"
 #include "kernel/fcntl.h"
+#include "kerne/stat.h"
 
 // Parsed command representation
 #define EXEC  1
@@ -12,6 +13,22 @@
 #define BACK  5
 
 #define MAXARGS 10
+
+// ============ HELPER FUNCTIONS =========
+// Return 1 if fd refers to the console, 0 otherwise
+int 
+isatty(int fd) 
+{
+  struct stat st;
+  if (fstat(fd, &st) < 0) // failed to get info
+    return 0;
+  
+  // In xv6: console is a device (T_DEV) with major == 1
+  if (st.type == T_DEVICE)
+    return 1;
+
+  return 0;
+}
 
 struct cmd {
   int type;
@@ -134,7 +151,8 @@ runcmd(struct cmd *cmd)
 int
 getcmd(char *buf, int nbuf)
 {
-  write(2, "$ ", 2);
+  if (isatty(0))
+    fprintf(2, "$ ");
   memset(buf, 0, nbuf);
   gets(buf, nbuf);
   if(buf[0] == 0) // EOF
