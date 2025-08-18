@@ -72,14 +72,90 @@ It's important for remind ourselves:
 - The shell (sh in xv6) already did `pipe()`, `fork()`, and `dup()` to connect stdout of the left process to stdin of `xargs`.
 
 So as far as `xargs` is concerned, stdin looks like a file where someone is writing lines. 
+
+### Some Explanations on `dup`
 ```
-Visualization of dup()
 Process fd table:
    fd=3  --->  struct file (inode=/foo, offset=42, ref=2)
    fd=4  ---^
 
 dup(3) returned 4
 ```
+
+### Some Explanations on `dup2`
+**Prototype**
+```c
+int dup2(int oldfd, int newfd);
+```
+- Makes `newfd` a copy of `oldfd`.
+- After the call, both file descriptors point to the same open file description (same offset, same inode/pipe/socket).
+- If `newfd` was already open, it is first closed. 
+- Unlike `dup`, you can specify exactly what the new fd number should be.
+
+**Example**
+```c
+int fd = open("out.txt", O_WRONLY);
+dup2(fd, 1); // redirect stdout to out.txt
+write(1, "hello\n", 6);
+```
+
+---
+**Step 1** — Before `dup2`
+```
+Process File Descriptor Table
+ ------------------------------
+ fd=0   → stdin (console)
+ fd=1   → stdout (console)
+ fd=2   → stderr (console)
+ fd=3   → out.txt   (opened by open())
+```
+
+---
+**Step 2** — Call `dup2(fd=3, newfd=1)`
+- Close `fd=1` (old stdout).
+- Make `fd=1` point to the same open file as `fd=3`.
+
+```
+Process File Descriptor Table
+ ------------------------------
+ fd=0   → stdin (console)
+ fd=1   → out.txt (duplicate of fd=3)
+ fd=2   → stderr (console)
+ fd=3   → out.txt
+```
+
+---
+**Step 3** — Write through `fd=1`
+
+```c
+write(1, "hello\n", 6);
+```
+
+- Goes to `out.txt`, because `fd=1` now points there.
+- The shell trick: after this redirection, any program that writes to `stdout` (`printf`, etc.) will write into the file.
+
+---
+**Visualization as pointers**
+```
+       ┌────────────┐
+fd=1 → │ out.txt    │
+fd=3 → │ out.txt    │
+       └────────────┘
+```
+
+Both descriptors share the same file offset (e.g., if you write with fd=3, fd=1 sees the cursor has moved too).
+
+---
+
+## Summary
+
+- `dup2(oldfd, newfd)` = “make `newfd` an alias for `oldfd`”.  
+- Used for **I/O redirection**:
+  - `dup2(fd, 0)` → redirect stdin.  
+  - `dup2(fd, 1)` → redirect stdout.  
+  - `dup2(fd, 2)` → redirect stderr.  
+
+---
 
 ## 5. Putting It All Together
 Algorithm in words:
