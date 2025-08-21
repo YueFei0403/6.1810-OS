@@ -22,7 +22,36 @@ char history[MAX_HISTORY][MAX_LINE];
 int history_count = 0;  // number of saved entries
 int history_index = 0;  // where we are browsing
 
+
 // ============ HELPER FUNCTIONS =========
+
+// Try to autocomplete the current word in buf when Tab is pressed.
+// Returns new cursor index `i` (may change if we expanded the buffer).
+int 
+handle_tab_completion(char *buf, int i) {
+  char prefix[DIRSIZ+1]; // ensure the string can be NULL-terminated
+  int j = i-1;
+
+  // Find start of current word (after last space or slash)
+  while (j >= 0 && buf[j] != ' ' && buf[j] != '/')
+    j--;
+  j++;
+
+  int len = i - j;
+  if (len >= DIRSIZ) len = DIRSIZ;
+
+  strncpy(prefix, buf + j, len);
+  prefix[len] = '\0';
+  
+  // Scan directory entries
+  int fd = open(".", 0);
+  struct dirent de;
+  int found = 0;
+  char match[DIRSIZ+1];
+
+  while ()
+}
+
 void
 readline(char *buf, int max)
 {
@@ -54,7 +83,8 @@ readline(char *buf, int max)
       if (read(0, &seq[0], 1) != 1) continue;
       if (read(0, &seq[1], 1) != 1) continue;
 
-      if (seq[0] == '[') {
+      /****** Start of Arrow-Checking ******/
+      if (seq[0] == '[') { 
         if (seq[1] == 'A') { // Up arrow
           if (history_index > 0) { // We have saved some cmds
             history_index--;
@@ -82,9 +112,18 @@ readline(char *buf, int max)
               strcpy(buf, history[history_index % MAX_HISTORY]);
               cmd_len = strlen(buf); // 
               write(1, buf, cmd_len);
+            } else { // we reach the blank line
+              buf[0] = '\0';
+              cmd_len = 0; // because we also removed the user's whatever input
             }
           }
         }
+      } 
+      /****** End of Arrow-Checking ******/
+    } else if (c == 127 || c == '\b') { // backspace
+      if (cmd_len > 0) {
+        cmd_len--;
+        write(1, "\b \b", 3);
       }
     }
   }
