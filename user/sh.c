@@ -14,7 +14,83 @@
 
 #define MAXARGS 10
 
+// For cmd history buffer
+#define MAX_HISTORY 16
+#define MAX_LINE 128
+
+char history[MAX_HISTORY][MAX_LINE];
+int history_count = 0;  // number of saved entries
+int history_index = 0;  // where we are browsing
+
 // ============ HELPER FUNCTIONS =========
+void
+readline(char *buf, int max)
+{
+  int cmd_len = 0;
+  int browsing = 0;
+  buf[0] = '\0';
+
+  while (1) {
+    char c;
+    if (read(0, &c, 1) != 1)
+      break;
+
+    // Case 1: One command finishes -> save to history buffer
+    if (c == '\n') {
+      buf[cmd_len] = '\0';
+      printf("\n");
+
+      // We must first check history_count==0
+      if (cmd_len > 0 && (history_count == 0 || 
+            strcmp(buf, history[(history_count-1) % MAX_HISTORY]) != 0)) {
+        strcpy(history[history_count % MAX_HISTORY], buf); // strcpy(dest, src)
+        history_count++;
+      }
+      history_index = history_count;
+      break;
+    // Case 2: Up/Down Arrows
+    } else if (c == 0x1b) { // ESC
+      char seq[2];
+      if (read(0, &seq[0], 1) != 1) continue;
+      if (read(0, &seq[1], 1) != 1) continue;
+
+      if (seq[0] == '[') {
+        if (seq[1] == 'A') { // Up arrow
+          if (history_index > 0) { // We have saved some cmds
+            history_index--;
+
+            // Clear current line
+            while (cmd_len > 0) {
+              write(1, "\b \b", 3);
+              cmd_len--;
+            }
+            
+            // Print history line
+            strcpy(buf, history[history_index % MAX_HISTORY]);
+            cmd_len = strlen(buf);
+            write(1, buf, cmd_len);
+          }
+        } else if (seq[1] == 'B') { // Down arrow
+          if (history_index < history_count) {
+            history_index++;
+            // Clear current line
+            while (cmd_len > 0) {
+              write(1, "\b \b", 3);
+              cmd_len--;
+            }
+            if (history_index < history_count) {
+              strcpy(buf, history[history_index % MAX_HISTORY]);
+              cmd_len = strlen(buf); // 
+              write(1, buf, cmd_len);
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+
 // Return 1 if fd refers to the console, 0 otherwise
 int 
 isatty(int fd) 
