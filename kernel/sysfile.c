@@ -16,6 +16,7 @@
 #include "file.h"
 #include "fcntl.h"
 
+extern void console_set_rawmode(int on);
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
 static int
@@ -167,6 +168,15 @@ bad:
   iunlockput(ip);
   end_op();
   return -1;
+}
+
+uint64
+sys_ttyraw(void)
+{
+  int on;
+  argint(0, &on); // fetch first syscall argument
+  console_set_rawmode(on);   // linker resolves this to console.c's definition
+  return 0;
 }
 
 // Is the directory dp empty except for "." and ".." ?

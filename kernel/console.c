@@ -50,6 +50,8 @@ struct {
   uint r;  // Read index
   uint w;  // Write index
   uint e;  // Edit index
+
+  int rawmode;  // NEW: 0 = cooked (default), 1 = raw
 } cons;
 
 //
@@ -150,26 +152,33 @@ consoleintr(int c)
     break;
   case C('H'): // Backspace
   case '\x7f': // Delete key
-    if(cons.e != cons.w){
-      cons.e--;
-      consputc(BACKSPACE);
+    if (!cons.rawmode) { // only cooked mode handles editing
+      if (cons.e != cons.w) {
+        cons.e--;
+        consputc(BACKSPACE);
+      }
+    } else {
+      // in raw mode: just deliver the keycode (DEL/Ctrl-H) to user space
+      cons.buf[cons.e++ % INPUT_BUF_SIZE] = c;
+      cons.w = cons.e;
+      wakeup(&cons.r);
     }
     break;
   default:
     if(c != 0 && cons.e-cons.r < INPUT_BUF_SIZE){
       c = (c == '\r') ? '\n' : c;
-
-      // echo back to the user.
-      consputc(c);
-
-      // store for consumption by consoleread().
+      // if in raw mode: no kernel echo, deliver immediately
       cons.buf[cons.e++ % INPUT_BUF_SIZE] = c;
-
-      if(c == '\n' || c == C('D') || cons.e-cons.r == INPUT_BUF_SIZE){
-        // wake up consoleread() if a whole line (or end-of-file)
-        // has arrived.
-        cons.w = cons.e;
+      if (cons.rawmode) {
+        cons.w = cons.e;  // make char available right away
         wakeup(&cons.r);
+      } else {
+        // cooked (default xv6): echo and wait for newline/EOF
+        consputc(c);
+        if (c == '\n' || c == C('D') || cons.e-cons.r == INPUT_BUF_SIZE) {
+          cons.w = cons.e;
+          wakeup(&cons.r);
+        }
       }
     }
     break;
@@ -189,4 +198,13 @@ consoleinit(void)
   // to consoleread and consolewrite.
   devsw[CONSOLE].read = consoleread;
   devsw[CONSOLE].write = consolewrite;
+}
+
+
+void 
+console_set_rawmode(int on)
+{
+  acquire(&cons.lock);
+  cons.rawmode = on;
+  release(&cons.lock);
 }

@@ -4,6 +4,7 @@
 #include "user/user.h"
 #include "kernel/fcntl.h"
 #include "kernel/stat.h"
+#include "kernel/fs.h"
 
 // Parsed command representation
 #define EXEC  1
@@ -14,25 +15,23 @@
 
 #define MAXARGS 10
 
-// For cmd history buffer
 #define MAX_HISTORY 16
 #define MAX_LINE 128
 
 char history[MAX_HISTORY][MAX_LINE];
-int history_count = 0;  // number of saved entries
-int history_index = 0;  // where we are browsing
+int history_count = 0; // number of saved entries
+int history_index = 0; // where we are browsing
 
-
-// ============ HELPER FUNCTIONS =========
-
-// Try to autocomplete the current word in buf when Tab is pressed.
+// ============ HELPER FUNCTIONS ===========
+// Try to autocomplete the current word in buf when Tab is pressed
 // Returns new cursor index `i` (may change if we expanded the buffer).
 int 
-handle_tab_completion(char *buf, int i) {
-  char prefix[DIRSIZ+1]; // ensure the string can be NULL-terminated
-  int j = i-1;
+handle_tab_completion(char *buf, int i)
+{
+  char prefix[DIRSIZ+1];
+  int j = i - 1;
 
-  // Find start of current word (after last space or slash)
+  // Find start of current word (after last space or splash)
   while (j >= 0 && buf[j] != ' ' && buf[j] != '/')
     j--;
   j++;
@@ -42,21 +41,51 @@ handle_tab_completion(char *buf, int i) {
 
   strncpy(prefix, buf + j, len);
   prefix[len] = '\0';
-  
+
   // Scan directory entries
   int fd = open(".", 0);
   struct dirent de;
   int found = 0;
   char match[DIRSIZ+1];
 
-  while ()
+  while (read(fd, &de, sizeof(de)) == sizeof(de)) {
+    if (de.inum == 0) continue;
+
+    if (strncmp(de.name, prefix, len) == 0) {
+      if (found == 0) {
+        strncpy(match, de.name, DIRSIZ);
+        match[DIRSIZ] = '\0';
+        found = 1;
+      } else {
+        found = 2;
+        break;
+      }
+    }
+  }
+  close(fd);
+
+  if (found == 1) {
+    // Autocomplete: erase current prefix
+    while (i > j) {
+      write(1, "\b \b", 3);
+      i--;
+    }
+    // Insert match
+    strcpy(buf + i, match);
+    i += strlen(match);
+    write(1, match, strlen(match));
+  } else if (found > 1) {
+    write(1, "\n[ambiguous]\n", 13);
+    write(1, buf, i); // reprint current line
+  }
+
+  return i;
 }
 
 void
 readline(char *buf, int max)
 {
   int cmd_len = 0;
-  int browsing = 0;
   buf[0] = '\0';
 
   while (1) {
@@ -64,29 +93,29 @@ readline(char *buf, int max)
     if (read(0, &c, 1) != 1)
       break;
 
-    // Case 1: One command finishes -> save to history buffer
+    // ENTER pressed -> finalize input
     if (c == '\n') {
       buf[cmd_len] = '\0';
       printf("\n");
-
-      // We must first check history_count==0
-      if (cmd_len > 0 && (history_count == 0 || 
-            strcmp(buf, history[(history_count-1) % MAX_HISTORY]) != 0)) {
-        strcpy(history[history_count % MAX_HISTORY], buf); // strcpy(dest, src)
-        history_count++;
-      }
-      history_index = history_count;
+      // Save into history (avoid duplicate of last entry)
+      if (cmd_len > 0 && (history_count == 0 ||
+            strcmp(buf, history[(history_count - 1) % MAX_HISTORY]) != 0)) {
+              strcpy(history[history_count % MAX_HISTORY], buf);
+              history_count++;
+            }
+      history_index = history_count; // reset cursor to "new input"
       break;
-    // Case 2: Up/Down Arrows
-    } else if (c == 0x1b) { // ESC
+
+    // ARROW KEYS
+    } else if (c == 0x1b) { // ESC sequence
       char seq[2];
       if (read(0, &seq[0], 1) != 1) continue;
       if (read(0, &seq[1], 1) != 1) continue;
 
-      /****** Start of Arrow-Checking ******/
-      if (seq[0] == '[') { 
-        if (seq[1] == 'A') { // Up arrow
-          if (history_index > 0) { // We have saved some cmds
+      if (seq[0] == '[') {
+        // UP ARROW
+        if (seq[1] == 'A') {
+          if (history_index > 0) {
             history_index--;
 
             // Clear current line
@@ -94,39 +123,57 @@ readline(char *buf, int max)
               write(1, "\b \b", 3);
               cmd_len--;
             }
-            
-            // Print history line
+
+            // Load history entry
             strcpy(buf, history[history_index % MAX_HISTORY]);
             cmd_len = strlen(buf);
             write(1, buf, cmd_len);
           }
-        } else if (seq[1] == 'B') { // Down arrow
+        }
+        // DOWN ARROW
+        else if (seq[1] == 'B') {
           if (history_index < history_count) {
             history_index++;
-            // Clear current line
+
+            // clear current line
             while (cmd_len > 0) {
               write(1, "\b \b", 3);
               cmd_len--;
             }
+
             if (history_index < history_count) {
+              // Load newer entry
               strcpy(buf, history[history_index % MAX_HISTORY]);
-              cmd_len = strlen(buf); // 
+              cmd_len = strlen(buf);
               write(1, buf, cmd_len);
-            } else { // we reach the blank line
+            } else {
+              // blank line if we're past newest
               buf[0] = '\0';
-              cmd_len = 0; // because we also removed the user's whatever input
+              cmd_len = 0;
             }
           }
         }
-      } 
-      /****** End of Arrow-Checking ******/
-    } else if (c == 127 || c == '\b') { // backspace
+      }
+
+    // BACKSPACE
+    } else if (c == 127 || c == '\b') {
       if (cmd_len > 0) {
         cmd_len--;
         write(1, "\b \b", 3);
       }
-    }
+
+    // TAB completion
+    } else if (c == '\t') {
+      cmd_len = handle_tab_completion(buf, cmd_len);
+
+    // NORMAL CHARACTER
+    } else if (cmd_len < max-1) {
+      buf[cmd_len++] = c;
+      write(1, &c, 1);
+    }      
   }
+
+  buf[cmd_len] = '\0';
 }
 
 
@@ -269,7 +316,7 @@ getcmd(char *buf, int nbuf)
   if (isatty(0))
     fprintf(2, "$ ");
   memset(buf, 0, nbuf);
-  gets(buf, nbuf);
+  readline(buf, nbuf);
   if(buf[0] == 0) // EOF
     return -1;
   return 0;
@@ -278,6 +325,7 @@ getcmd(char *buf, int nbuf)
 int
 main(void)
 {
+  ttyraw(1); // enable raw mode for this process
   static char buf[100];
   int fd;
 
